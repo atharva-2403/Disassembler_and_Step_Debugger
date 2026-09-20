@@ -1,71 +1,66 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <elf.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
-int main(int argc, char *argv[])
-{
-    if (argc != 2)
-    {
-        printf("Usage: %s <executable>\n", argv[0]);
-        return 1;
-    }
+//Target- 1 : Take an ELF file as an arguement, validate it.
+            // then check if its an ELF FILE USING MAGIC NUMBERS && check if its 64 bits
 
-    int fd = open(argv[1], O_RDONLY);
+int main(int argc,char *argv[]){
+	if(argc == 1){
+		printf("No arguments specified.\n");
+		printf("Usage : checkelf <filename>\n");
+		return 1;
+	}
+	if(argc > 2){
+		printf("Too many arguments.\n");
+		printf("Usage : checkelf <filename>\n");
+		return 1;
+	}
+	printf("Begin File Processing\n");
+    
+	//the file that needs to be decoded is argv[1]
+	
+	int file_desc = open(argv[1],O_RDONLY);
+	if(file_desc < 0){
+		perror("Could Not open file:");
+		return 1;
+	}
+	//opened the file. 
+	//now we have to create a container to store the header data.
 
-    if (fd < 0)
-    {
-        perror("Could not open file");
-        return 1;
-    }
+	//declaring the container.
+	
+	Elf32_Ehdr elf_header_container;
 
-    Elf32_Ehdr header;
-
-    ssize_t bytes_read = read(fd, &header, sizeof(header));
-
-    if (bytes_read != sizeof(header))
-    {
-        printf("Could not read ELF header.\n");
-        close(fd);
-        return 1;
-    }
-
-    // Check ELF magic number 
-    if (header.e_ident[EI_MAG0] != ELFMAG0 ||
-        header.e_ident[EI_MAG1] != ELFMAG1 ||
-        header.e_ident[EI_MAG2] != ELFMAG2 ||
-        header.e_ident[EI_MAG3] != ELFMAG3)
-    {
-        printf("Not a valid ELF file.\n");
-        close(fd);
-        return 1;
-    }
-
-    // Check whether it is 32-bit 
-    if (header.e_ident[EI_CLASS] != ELFCLASS32)
-    {
-        printf("This is not a 32-bit ELF file.\n");
-        close(fd);
-        return 1;
-    }
-
-    // Check whether it is x86 
-    if (header.e_machine != EM_386)
-    {
-        printf("This is not an x86 (32-bit) executable.\n");
-        close(fd);
-        return 1;
-    }
-
-    printf("Valid x86 32-bit ELF file\n\n");
-
-    printf("Entry point : 0x%x\n", header.e_entry);
-    printf("Section table offset : 0x%x\n", header.e_shoff);
-    printf("Number of sections : %d\n", header.e_shnum);
-    printf("Section header size : %d bytes\n", header.e_shentsize);
-
-    close(fd);
+	//Elf32_Ehdr is a struct that comes under the header lib elf.h
+	
+	ssize_t bytes_read = read(file_desc,&elf_header_container,sizeof(elf_header_container));
+	printf("Verifying the type of file......\n");
+	
+	if(elf_header_container.e_ident[EI_MAG0] == ELFMAG0 &&
+	   elf_header_container.e_ident[EI_MAG1] == ELFMAG1 &&
+   	   elf_header_container.e_ident[EI_MAG2] == ELFMAG2 &&
+	   elf_header_container.e_ident[EI_MAG3] == ELFMAG3){
+		printf("Verfication Success.\n 32-bit ELF format Detected.\n");
+	}
+	else{
+		printf("File is not in the ELF Format. Please input an elf file");
+		return 1;
+	}	
+		
+	if(elf_header_container.e_ident[EI_CLASS] != ELFCLASS32){
+		printf("Not a 32-bit ELF File Format\n");
+		return 1;
+	}
 
 
-   return 0; }
+	off_t section_header_offset = elf_header_container.e_shoff;
+	off_t section_header_index_number = elf_header_container.e_shstrndx;
+	
+	off_t the_Actual_thing = section_header_offset + section_header_index_number * sizeof(Elf64_Shdr);
+
+}
+//end of program 
