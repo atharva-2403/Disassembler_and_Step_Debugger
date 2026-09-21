@@ -16,7 +16,7 @@ int main(int argc,char *argv[]){
 		return 1;
 	}
 	if(argc > 2){
-		printf("Too many arguments.\n");
+		printf("too many arguments.\n");
 		printf("Usage : checkelf <filename>\n");
 		return 1;
 	}
@@ -149,6 +149,6 @@ if (lseek(fd, text_section->sh_offset, SEEK_SET) == -1) {
     return 1;
 }
 
-//space for bytes
+//space for bytes of .text
 unsigned char text_bytes[text_section->sh_size];
 read(fd, text_bytes, text_section->sh_size);
