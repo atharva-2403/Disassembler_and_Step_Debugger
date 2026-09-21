@@ -60,44 +60,44 @@ int main(int argc,char *argv[]){
 
 	off_t section_header_offset = elf_header_container.e_shoff; //where does section table header point? = e_shoff
 	off_t section_header_index_number = elf_header_container.e_shstrndx;
-	
-}
+		
+	}
 
 
-//------- START OF 1.2 SEARCHING .TEXT SECTION AND EXTRACTING ITS BYTES.----------
+	//------- START OF 1.2 SEARCHING .TEXT SECTION AND EXTRACTING ITS BYTES.----------
 
-//1.2 includes 
-//a) find section table header b) find .text c) extract .text bytes 
+	//1.2 includes 
+	//a) find section table header b) find .text c) extract .text bytes 
 
-//high level understanding 
-// 1. section header table
-   
-//2.section name string satble
-   
-// 3.find .text
-   
-// 4.get its offset + address + size
-   
-// 5.read .text bytes
+	//high level understanding 
+	// 1. section header table
+	   
+	//2.section name string satble
+	   
+	// 3.find .text
+	   
+	// 4.get its offset + address + size
+	   
+	// 5.read .text bytes
 
 
-//------
+	//------
 
-// Milestone 1 
-//find the section headers, and store it in an array.
+	// Milestone 1 
+	//find the section headers, and store it in an array.
 
-if(lseek(fd, section_header_offset, SEEK_SET) == -1){       //this is moving file pointer to section header
-printf("coulnd find section header");
-return 1; }
+	if(lseek(fd, section_header_offset, SEEK_SET) == -1){       //this is moving file pointer to section header
+	printf("coulnd find section header");
+	return 1; }
 
-//e_shroff -> 0x1365 -> lseek -> 0x1365 -> section header 
+	//e_shroff -> 0x1365 -> lseek -> 0x1365 -> section header 
 
-Elf32_Shdr section_headers[elf_header_container.e_shnum]; 	//array to hold section headers
+	Elf32_Shdr section_headers[elf_header_container.e_shnum]; 	//array to hold section headers
 
-read(fd, section_headers, sizeof(section_headers)); 
+	read(fd, section_headers, sizeof(section_headers)); 
 
-// Milestone 2 
-// so far, we  head to section table heading by using eshorff(offset) , then lseek to locate the section headers and store in array.
+	// Milestone 2 
+	// so far, we  head to section table heading by using eshorff(offset) , then lseek to locate the section headers and store in array.
 // find section name string table -> find .text -> get .text offset,address -> read .text bytes
 
 //section name table Concept : Section headers contain secton name table which contain offset that points to .text. 
