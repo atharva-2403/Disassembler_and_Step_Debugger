@@ -1,7 +1,7 @@
 CC = gcc 
 CFLAGS = -g
 
-all : validator text_extractor 32_bit_elf run
+all : 32_bit_elf validator text_extractor run
 
 validator : file_validation.c
 	$(CC) $(CFLAGS) file_validation.c -o file_validation
