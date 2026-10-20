@@ -7,7 +7,7 @@
 
 // 1.1 of Project - ELF VALIDATION.
 //Target- 1 : Take an ELF file as an arguement, validate it.
-            // then check if its an ELF FILE USING MAGIC NUMBERS && check if its 64 bits
+          // then check if its an ELF FILE USING MAGIC NUMBERS && check if its 32 bits
 
 int main(int argc,char *argv[]){
 	if(argc == 1){
@@ -37,9 +37,15 @@ int main(int argc,char *argv[]){
 	Elf32_Ehdr elf_header_container;
 
 	//Elf32_Ehdr is a struct that comes under the header lib elf.h
-	
-	ssize_t bytes_read = read(file_desc,&elf_header_container,sizeof(elf_header_container));
-	printf("Verifying the type of file......\n");
+	ssize_t bytes_read = read(file_desc, &elf_header_container, sizeof(elf_header_container));
+
+if (bytes_read != sizeof(elf_header_container)) {
+    printf("cant read the complete ELF header.\n");
+    close(file_desc);
+    return 1;
+}
+
+printf("Verifying the type of file......\n");
 	
 	if(elf_header_container.e_ident[EI_MAG0] == ELFMAG0 &&
 	   elf_header_container.e_ident[EI_MAG1] == ELFMAG1 &&
@@ -56,12 +62,15 @@ int main(int argc,char *argv[]){
 		printf("Not a 32-bit ELF File Format\n");
 		return 1;
 	}
-
+	
+if (elf_header_container.e_machine != EM_386) {
+    printf("Not an x86 (32-bit) ELF file.\n");
+    close(file_desc);
+    return 1;
+}
 
 	off_t section_header_offset = elf_header_container.e_shoff; //where does section table header point? = e_shoff
 	off_t section_header_index_number = elf_header_container.e_shstrndx;
-	
-}
 
 
 //------- START OF 1.2 SEARCHING .TEXT SECTION AND EXTRACTING ITS BYTES.----------
@@ -86,33 +95,90 @@ int main(int argc,char *argv[]){
 // Milestone 1 
 //find the section headers, and store it in an array.
 
-if(lseek(fd, section_header_offset, SEEK_SET) == -1){       //this is moving file pointer to section header
+if (lseek(file_desc, section_header_offset, SEEK_SET) == -1) {{       //this is moving file pointer to section header
 printf("coulnd find section header");
 return 1; }
 
 //e_shroff -> 0x1365 -> lseek -> 0x1365 -> section header 
 
-Elf32_Shdr section_headers[elf_header_container.e_shnum]; 	//array to hold section headers
+// Array to hold section headers
+if (elf_header_container.e_shnum == 0 ||
+    elf_header_container.e_shentsize != sizeof(Elf32_Shdr)) {
+    printf("Invalid section header information.\n");
+    close(file_desc);
+    return 1;
+}
 
-read(fd, section_headers, sizeof(section_headers)); 
+Elf32_Shdr *section_headers =
+    malloc(elf_header_container.e_shnum * sizeof(Elf32_Shdr));
 
+if (section_headers == NULL) {
+    perror("cant allocate section headers");
+    close(file_desc);
+    return 1;
+}
+
+size_t section_headers_size =
+    elf_header_container.e_shnum * sizeof(Elf32_Shdr);
+
+bytes_read = read(file_desc, section_headers, section_headers_size);
+
+if (bytes_read != (ssize_t)section_headers_size) {
+    printf("cant read section headers completely.\n");
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
 // Milestone 2 
 // so far, we  head to section table heading by using eshorff(offset) , then lseek to locate the section headers and store in array.
 // find section name string table -> find .text -> get .text offset,address -> read .text bytes
 
 //section name table Concept : Section headers contain secton name table which contain offset that points to .text. 
 
+	if (section_header_index_number >= elf_header_container.e_shnum) {
+    printf("Invalid section name table index.\n");
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
 Elf32_Shdr section_name_table = section_headers[section_header_index_number];
 
-if (lseek(fd, string_table_offset, SEEK_SET) == -1) {
-    printf("cant find section name string table\n");
+// Find the section name string table in the file.
+off_t string_table_offset = section_name_table.sh_offset;
+
+if (lseek(file_desc, string_table_offset, SEEK_SET) == -1) {
+    perror("Cannot find section name string table");
+    free(section_headers);
+    close(file_desc);
     return 1;
 }
 
-// size of string table , array with section names , read it.
-section_name_table.sh_size
-char section_names[section_name_table.sh_size];
-read(fd, section_names, sizeof(section_names));
+// Size of string table, array with section names, read it.
+if (section_name_table.sh_size == 0) {
+    printf("Section name string table is empty.\n");
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
+
+char *section_names = malloc(section_name_table.sh_size);
+
+if (section_names == NULL) {
+    perror("Could not allocate section names");
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
+
+bytes_read = read(file_desc, section_names, section_name_table.sh_size);
+
+if (bytes_read != (ssize_t)section_name_table.sh_size) {
+    printf("Could not read section names completely.\n");
+    free(section_names);
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
 
 //Milestone 3 : Get .text offset
 //so far we have section header and section names array
@@ -144,11 +210,58 @@ printf("Size: %u bytes\n", text_section->sh_size);
 //Milestone 3: read .text
 //go to .text
 
-if (lseek(fd, text_section->sh_offset, SEEK_SET) == -1) {
-    printf("Could not find .text section\n");
+if (lseek(file_desc, text_section->sh_offset, SEEK_SET) == -1) {
+    perror("Could not find .text section");
+    free(section_names);
+    free(section_headers);
+    close(file_desc);
     return 1;
 }
 
-//space for bytes of .text
-unsigned char text_bytes[text_section->sh_size];
-read(fd, text_bytes, text_section->sh_size);
+// Space for bytes of .text
+if (text_section->sh_size == 0) {
+    printf(".text section is empty.\n");
+    free(section_names);
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
+
+unsigned char *text_bytes = malloc(text_section->sh_size);
+
+if (text_bytes == NULL) {
+    perror("Could not allocate .text bytes");
+    free(section_names);
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
+
+bytes_read = read(file_desc, text_bytes, text_section->sh_size);
+
+if (bytes_read != (ssize_t)text_section->sh_size) {
+    printf("Could not read .text bytes completely.\n");
+    free(text_bytes);
+    free(section_names);
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
+
+// Print extracted bytes to verify them.
+printf("\n.text bytes:\n");
+
+for (size_t i = 0; i < text_section->sh_size; i++) {
+    printf("%02X ", text_bytes[i]);
+}
+
+printf("\n");
+
+// Clean up allocated memory and close the file.
+free(text_bytes);
+free(section_names);
+free(section_headers);
+close(file_desc);
+
+return 0;
+}
