@@ -53,15 +53,17 @@ printf("Verifying the type of file......\n");
 	   elf_header_container.e_ident[EI_MAG3] == ELFMAG3){
 		printf("Verfication Success.\n 32-bit ELF format Detected.\n");
 	}
-	else{
-		printf("File is not in the ELF Format. Please input an elf file");
-		return 1;
-	}	
+	else {
+    printf("File is not in the ELF Format. Please input an elf file.\n");
+    close(file_desc);
+    return 1;
+}	
 		
 	if(elf_header_container.e_ident[EI_CLASS] != ELFCLASS32){
-		printf("Not a 32-bit ELF File Format\n");
-		return 1;
-	}
+    printf("Not a 32-bit ELF File Format\n");
+    close(file_desc);
+    return 1;
+}
 	
 if (elf_header_container.e_machine != EM_386) {
     printf("Not an x86 (32-bit) ELF file.\n");
@@ -95,9 +97,11 @@ if (elf_header_container.e_machine != EM_386) {
 // Milestone 1 
 //find the section headers, and store it in an array.
 
-if (lseek(file_desc, section_header_offset, SEEK_SET) == -1) {{       //this is moving file pointer to section header
-printf("coulnd find section header");
-return 1; }
+if (lseek(file_desc, section_header_offset, SEEK_SET) == -1) {
+    perror("Could not find section header"); 						//moving pointer to section header. 
+    close(file_desc);
+    return 1;
+}
 
 //e_shroff -> 0x1365 -> lseek -> 0x1365 -> section header 
 
@@ -143,6 +147,13 @@ if (bytes_read != (ssize_t)section_headers_size) {
 }
 Elf32_Shdr section_name_table = section_headers[section_header_index_number];
 
+	if (section_name_table.sh_type != SHT_STRTAB) {
+    printf("Invalid section name string table.\n");
+    free(section_headers);
+    close(file_desc);
+    return 1;
+}
+
 // Find the section name string table in the file.
 off_t string_table_offset = section_name_table.sh_offset;
 
@@ -186,10 +197,23 @@ if (bytes_read != (ssize_t)section_name_table.sh_size) {
 
 Elf32_Shdr *text_section = NULL;
 
-for(int i=0; i < elf_header_container.e_shnum; i++) {
-	char *section_name =section_names + section_headers[i].sh_name;
-	
-	if (strcmp(section_name, ".text") == 0) {
+for (size_t i = 0; i < elf_header_container.e_shnum; i++) {
+
+    if (section_headers[i].sh_name >= section_name_table.sh_size) {
+        continue;
+    }
+
+    char *section_name =
+        section_names + section_headers[i].sh_name;
+
+    size_t remaining_size =
+        section_name_table.sh_size - section_headers[i].sh_name;
+
+    if (memchr(section_name, '\0', remaining_size) == NULL) {
+        continue;
+    }
+
+    if (strcmp(section_name, ".text") == 0) {
         text_section = &section_headers[i];
         break;
     }
@@ -197,9 +221,11 @@ for(int i=0; i < elf_header_container.e_shnum; i++) {
 
 if (text_section == NULL) {
     printf(".text section not found\n");
+    free(section_names);
+    free(section_headers);
+    close(file_desc);
     return 1;
 }
-
 printf(".text section found!\n");
 
 //text_section is pointing towards .text 
