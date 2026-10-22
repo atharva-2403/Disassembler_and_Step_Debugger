@@ -1,4 +1,4 @@
-#include <elf.h>
+#include <elf.h> // provided the elf structure and constants
 #include <stdio.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -11,32 +11,35 @@
 
 int main(int argc,char *argv[]){
 	if(argc == 1){
-		printf("No arguments specified.\n");
-		printf("Usage : checkelf <filename>\n");
+		printf("no arguments specified\n");
+		printf("usage:checkelf <filename>\n");
 		return 1;
 	}
 	if(argc > 2){
 		printf("too many arguments.\n");
-		printf("Usage : checkelf <filename>\n");
+		printf("usage:checkelf <filename>\n");
 		return 1;
 	}
-	printf("Begin File Processing\n");
+	printf("file processing has begun\n");
     
 	//the file that needs to be decoded is argv[1]
 	
 	int file_desc = open(argv[1],O_RDONLY);
+	
 	if(file_desc < 0){
-		perror("Could Not open file:");
+		perror("cant open file:");
 		return 1;
 	}
 	//opened the file. 
 	//now we have to create a container to store the header data.
 
 	//declaring the container.
-	
-	Elf32_Ehdr elf_header_container;
 
-	//Elf32_Ehdr is a struct that comes under the header lib elf.h
+
+	//reading the header files.
+	Elf32_Ehdr elf_header_container; //Elf32_Ehdr is a structure defined in .elf lib that shows 32bit header.
+
+	//copies bytes opened from file into this variable.
 	ssize_t bytes_read = read(file_desc, &elf_header_container, sizeof(elf_header_container));
 
 if (bytes_read != sizeof(elf_header_container)) {
@@ -45,27 +48,27 @@ if (bytes_read != sizeof(elf_header_container)) {
     return 1;
 }
 
-printf("Verifying the type of file......\n");
+printf("verifying the type of file (checking magic numbers)\n");
 	
 	if(elf_header_container.e_ident[EI_MAG0] == ELFMAG0 &&
 	   elf_header_container.e_ident[EI_MAG1] == ELFMAG1 &&
    	   elf_header_container.e_ident[EI_MAG2] == ELFMAG2 &&
 	   elf_header_container.e_ident[EI_MAG3] == ELFMAG3){
-		printf("Verfication Success.\n 32-bit ELF format Detected.\n");
+		printf("verfication successful.\n 32-bit ELF format Detected.\n");
 	}
 	else {
-    printf("File is not in the ELF Format. Please input an elf file.\n");
+    printf("file is not in the ELF format. please input an elf file.\n");
     close(file_desc);
     return 1;
 }	
 		
-	if(elf_header_container.e_ident[EI_CLASS] != ELFCLASS32){
+	if(elf_header_container.e_ident[EI_CLASS] != ELFCLASS32){    //EI_CLASS == ELFCLASS32 = the ELF file declares the 32 bit class
     printf("Not a 32-bit ELF File Format\n");
     close(file_desc);
     return 1;
 }
 	
-if (elf_header_container.e_machine != EM_386) {
+if (elf_header_container.e_machine != EM_386) {    //e_machine == EM_38 the ELF file declares the Intel 386 architecture family (32-bit x86)
     printf("Not an x86 (32-bit) ELF file.\n");
     close(file_desc);
     return 1;
@@ -98,7 +101,7 @@ if (elf_header_container.e_machine != EM_386) {
 //find the section headers, and store it in an array.
 
 if (lseek(file_desc, section_header_offset, SEEK_SET) == -1) {
-    perror("Could not find section header"); 						//moving pointer to section header. 
+    perror("could not find section header"); 						//moving pointer to section header. 
     close(file_desc);
     return 1;
 }
