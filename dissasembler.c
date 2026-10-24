@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include "decoder.h"
 
 // 1.1 of Project - ELF VALIDATION.
 //Target- 1 : Take an ELF file as an arguement, validate it.
