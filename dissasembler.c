@@ -266,6 +266,12 @@ if (text_bytes == NULL) {
     return 1;
 }
 
+//decode the extracted .text machine-code bytes.
+decode_instructions(text_bytes, text_section->sh_size,
+                    text_section->sh_addr);
+
+
+
 // read the .text machine code bytes and verify that the entire section was read successfully
 // if reading fails or is incomplet, free allocated memory close the file, and exit
 bytes_read = read(file_desc, text_bytes, text_section->sh_size);
