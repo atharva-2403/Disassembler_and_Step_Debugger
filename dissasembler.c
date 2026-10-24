@@ -229,25 +229,23 @@ if (text_section == NULL) {
     close(file_desc);
     return 1;
 }
-printf(".text section found!\n");
+printf(".text section found\n");
 
 //text_section is pointing towards .text 
 printf("Offset: %u\n", text_section->sh_offset);
 printf("Address: 0x%x\n", text_section->sh_addr);
 printf("Size: %u bytes\n", text_section->sh_size);
 
-//Milestone 3: read .text
-//go to .text
-
+//move to the .text sections file offset before reading its bytes.
 if (lseek(file_desc, text_section->sh_offset, SEEK_SET) == -1) {
-    perror("Could not find .text section");
+    perror("could not find .text section");
     free(section_names);
     free(section_headers);
     close(file_desc);
     return 1;
 }
 
-// Space for bytes of .text
+//check that .text is non-empty before allocating memory for its bytes.
 if (text_section->sh_size == 0) {
     printf(".text section is empty.\n");
     free(section_names);
@@ -256,6 +254,7 @@ if (text_section->sh_size == 0) {
     return 1;
 }
 
+//allocate a buffer to store the .text machine-code bytes.
 unsigned char *text_bytes = malloc(text_section->sh_size);
 
 if (text_bytes == NULL) {
@@ -266,6 +265,8 @@ if (text_bytes == NULL) {
     return 1;
 }
 
+// read the .text machine code bytes and verify that the entire section was read successfully
+// if reading fails or is incomplet, free allocated memory close the file, and exit
 bytes_read = read(file_desc, text_bytes, text_section->sh_size);
 
 if (bytes_read != (ssize_t)text_section->sh_size) {
