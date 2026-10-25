@@ -77,13 +77,28 @@ int decode_instructions(const uint8_t *bytes, size_t size,
             x86_register_t reg = get_register(opcode);
             uint32_t value = read_u32(&bytes[pos + 1]);
             printf("mov %s, %u\n", register_name(reg), value);
-        } else if (strcmp(rule->mnemonic, "add") == 0) {
+        } 
+        
+        else if (strcmp(rule->mnemonic, "add") == 0) {
             uint32_t value = read_u32(&bytes[pos + 1]);
             printf("add eax, %u\n", value);
-        } else {
+        } 
+            
+        else if (strcmp(rule->mnemonic, "push") == 0) {
+    x86_register_t reg = get_register(opcode);
+    printf("push %s\n", register_name(reg));
+        } 
+            
+        else if (strcmp(rule->mnemonic, "pop") == 0) {
+    x86_register_t reg = get_register(opcode);
+    printf("pop %s\n", register_name(reg));
+
+}
+    else {
             printf("%s\n", rule->mnemonic);
         }
 
+        
         pos += rule->fixed_length;
     }
 
