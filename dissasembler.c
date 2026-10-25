@@ -266,10 +266,6 @@ if (text_bytes == NULL) {
     return 1;
 }
 
-//decode the extracted .text machine-code bytes.
-decode_instructions(text_bytes, text_section->sh_size,
-                    text_section->sh_addr);
-
 
 
 // read the .text machine code bytes and verify that the entire section was read successfully
@@ -285,6 +281,10 @@ if (bytes_read != (ssize_t)text_section->sh_size) {
     return 1;
 }
 
+	printf("\nDecoded instructions:\n");
+decode_instructions(text_bytes, text_section->sh_size,
+                    text_section->sh_addr);
+	
 // Print extracted bytes to verify them.
 printf("\n.text bytes:\n");
 
