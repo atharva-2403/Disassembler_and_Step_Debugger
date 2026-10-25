@@ -1,4 +1,3 @@
-
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11
 
@@ -7,11 +6,13 @@ SOURCES = dissasembler.c decoder.c instruction_table.c
 HEADERS = decoder.h instruction_table.h instruction_framework.h
 TEST_FILE = test32
 
-.PHONY: all test check clean
+.PHONY: all test check clean FORCE
 
 all: $(TARGET)
 
-$(TARGET): $(SOURCES) $(HEADERS)
+FORCE:
+
+$(TARGET): FORCE $(SOURCES) $(HEADERS)
 	$(CC) $(CFLAGS) $(SOURCES) -o $(TARGET)
 
 test: $(TARGET)
