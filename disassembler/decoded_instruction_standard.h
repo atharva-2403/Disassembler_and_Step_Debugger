@@ -1,4 +1,5 @@
 #include "prefix_standard.h"
+#include "reference_instruction_standard.h"
 
 #define MAX_PREFIX_LIMIT 4
 
@@ -13,6 +14,9 @@ typedef enum{
 }segment_t;
 
 typedef struct{
+	
+	uint32_t address_in_elf;
+	
 	PrefixInfo prefixes[MAX_PREFIX_LIMIT];
 	int prefix_count;
 
@@ -25,5 +29,13 @@ typedef struct{
 	
 	segment_t segment_reg;
 
+	const char *mnemonic;
+	bool modrm_needed;
+
+	//beyond this is the information about operands
+	
+	operand_count_t oprd_count;
+	operand_reference_t operands[MAX_OPERANDS];	
 
 }decoded_instruction_definition;
+

@@ -13,9 +13,9 @@ typedef enum {
        	ENCODING_NONE,
 	ENCODING_RM,  		//This is the modrm rm
 	ENCODING_REG, 		//This is the modrm reg
-	ENCODING_OPCODE_REG,	//possibly redundant.
+	ENCODING_OPCODE_REG,	//This is for the shorthard instructions. 
 	ENCODING_IMMEDIATE,	//for immediate values
-	ENCODING_RELATIVE, 	//idek what this is 
+	ENCODING_RELATIVE, 	// like call rel32. this holds the relative address or something i think.  
 	ENCODING_FAR_POINTER,	//what is this???
 	ENCODING_FIXED_REG, 	//LIKE pop ds
 	ENCODING_IMPLICIT	//This is understood 
@@ -27,7 +27,8 @@ typedef enum{
 	WIDTH_NONE,
 	WIDTH_8,
 	WIDTH_16,
-	WIDTH_32
+	WIDTH_32,
+	WIDTH_SIGN_EXT_8
 
 }operand_width_t;
 
@@ -56,12 +57,6 @@ typedef enum{
 	EXTENSION_SIGN
 
 }extension_t;
-typedef struct{
-
-	uint32_t value;
-	extension_t extension;
-
-}immediate_t;
 
 typedef struct{
 
@@ -82,7 +77,7 @@ typedef struct{
 typedef union{
 
 	x86_reg_t reg;
-	immediate_t imm_val;
+	uint32_t imm_val;
 	memory_t mem_val;
 	int32_t rel_val;
 	far_pointer_t far_ptr_val;
