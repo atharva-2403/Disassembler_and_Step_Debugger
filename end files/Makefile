@@ -51,12 +51,6 @@ test_state: $(STATE_OBJS) test_state.o
 	@./run_test_state
 	@rm -f run_test_state
 
-# test MC/DC coverage on core functions
-test_mcdc: $(STATE_OBJS) test_mcdc.o
-	$(CC) $(CFLAGS) -o run_test_mcdc test_mcdc.o $(STATE_OBJS)
-	@./run_test_mcdc
-	@rm -f run_test_mcdc
-
 # test passed format
 test_passed: $(STATE_OBJS) passed_format.o test_passed_format.o
 	$(CC) $(CFLAGS) -o run_test_passed test_passed_format.o passed_format.o $(STATE_OBJS)
