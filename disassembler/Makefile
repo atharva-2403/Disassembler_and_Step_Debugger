@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -I frameworks/ -I metadata/
 
 all: 
-	./file_validation 32_bit_elf
+	./file_validation test32
 
 help:
 	# make		: run the program
