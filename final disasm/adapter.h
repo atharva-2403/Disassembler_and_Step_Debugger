@@ -212,6 +212,9 @@ typedef struct DisasmResult {
 // Disassembles raw machine code into the unified Instruction format.
 DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, unsigned int start_addr);
 
+// Disassembles the .text section of a 32-bit ELF file directly.
+DisasmResult* disasm_elf_file(const char *filepath);
+
 // Frees the DisasmResult structure and all allocated instruction buffers.
 void free_adapter_result(DisasmResult *result);
 

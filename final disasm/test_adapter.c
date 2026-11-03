@@ -124,6 +124,12 @@ int main(void) {
     assert(res->instructions[5].type == INST_RET);
     assert(res->instructions[5].n_operands == 0);
 
+    // -------------------------------------------------------------
+    // 7. ELF file direct disassembly API safety checks
+    // -------------------------------------------------------------
+    assert(disasm_elf_file(NULL) == NULL);
+    assert(disasm_elf_file("non_existent_file_xyz.elf") == NULL);
+
     free_adapter_result(res);
     printf("\n[SUCCESS] All unified adapter assertions passed cleanly!\n\n");
     return 0;

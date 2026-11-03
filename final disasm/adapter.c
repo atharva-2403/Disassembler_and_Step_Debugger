@@ -4,6 +4,7 @@
 #include "semantic_decoder.h"
 #include "decoded_binary_framework.h"
 #include "formatter.h"
+#include "elf32.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -383,6 +384,21 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
         offset += 1;
     }
 
+    return result;
+}
+
+/* ========================================================================= */
+/* ELF32 Convenience API: Disassemble Directly From File                     */
+/* ========================================================================= */
+
+DisasmResult* disasm_elf_file(const char *filepath) {
+    if (!filepath) return NULL;
+    elf32_section_t sec;
+    if (elf32_load_text_section(filepath, &sec) != 0) {
+        return NULL;
+    }
+    DisasmResult *result = disasm_to_adapter(sec.data, (unsigned int)sec.size, sec.vaddr);
+    elf32_free_section(&sec);
     return result;
 }
 

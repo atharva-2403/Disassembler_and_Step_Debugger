@@ -33,7 +33,7 @@ unit_tests: $(CORE_OBJS) test_mcdc.o
 	@rm -f run_unit_tests
 
 # Adapter bridge test: verifies unified API for frontend and debugger
-test_adapter_bridge: $(CORE_OBJS) formatter.o adapter.o test_adapter.o
+test_adapter_bridge: $(CORE_OBJS) elf32.o formatter.o adapter.o test_adapter.o
 	$(CC) $(CFLAGS) -o run_test_adapter $^
 	@./run_test_adapter
 	@rm -f run_test_adapter
