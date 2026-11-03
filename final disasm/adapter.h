@@ -19,7 +19,8 @@ typedef enum InstructionType {
     CONDITIONAL_BRANCH,
     JUMP,
     CALL,
-    RET
+    RET,
+    INVALID
 } InstructionType;
 
 #define INST_NORMAL          NORMAL
@@ -27,6 +28,7 @@ typedef enum InstructionType {
 #define INST_JUMP            JUMP
 #define INST_CALL            CALL
 #define INST_RET             RET
+#define INST_INVALID         INVALID
 
 /* Condition codes for Jcc and SETcc instructions */
 typedef enum ConditionCode {
@@ -142,6 +144,7 @@ typedef struct Instruction {
 
     InstructionType type;
     ConditionCode   condition;
+    bool            is_valid;
     uint32_t target_address;
     bool     has_target_address;
     bool     is_indirect;

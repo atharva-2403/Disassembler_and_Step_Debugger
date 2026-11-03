@@ -250,12 +250,26 @@ int decode_semantic(const decoded_binary *d, uint32_t addr,instruction_reference
 
     case ENCODING_RM:
       // mod 3 -> reg, otherwise memory
-      if (d->modrm.mod == 3) {
+      if (d->modrm.is_valid == YES && d->modrm.mod == 3) {
         op->operand_value.reg =
             resolve_register(d->modrm.rm, op->operand_width, opsize_prefix);
+      } else if (d->modrm.is_valid != YES) {
+        // Absolute memory address without ModR/M (e.g. MOV moffs 0xA1 / 0xA3)
+        op->operand_value.mem_val.base = REG_NONE;
+        op->operand_value.mem_val.index = REG_NONE;
+        op->operand_value.mem_val.scale = 1;
+        op->operand_value.mem_val.displacement = (int32_t)(
+            d->immediate.bytes[0] |
+            (d->immediate.bytes[1] << 8) |
+            (d->immediate.bytes[2] << 16) |
+            ((uint32_t)d->immediate.bytes[3] << 24));
       } else {
         op->operand_value.mem_val = resolve_memory(d);
       }
+      break;
+
+    case ENCODING_IMPLICIT:
+      // Constant/implicit operand value retained from instruction template
       break;
 
     case ENCODING_IMMEDIATE:

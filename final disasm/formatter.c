@@ -173,8 +173,11 @@ static void format_single_operand(const decoded_binary *bin,
             snprintf(buf, max_len, "0x%x", (uint32_t)op->operand_value.rel_val);
             break;
 
-        case ENCODING_NONE:
         case ENCODING_IMPLICIT:
+            snprintf(buf, max_len, "$0x%x", op->operand_value.const_val);
+            break;
+
+        case ENCODING_NONE:
         default:
             break;
     }

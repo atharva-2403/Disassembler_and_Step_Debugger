@@ -167,6 +167,11 @@ static void map_operand(const decoded_binary *bin,
             dst_op->immediate = (int32_t)src_op->operand_value.imm_val.value;
             break;
 
+        case ENCODING_IMPLICIT:
+            dst_op->type = OP_IMMEDIATE;
+            dst_op->immediate = (int32_t)src_op->operand_value.const_val;
+            break;
+
         case ENCODING_RELATIVE:
             dst_op->type = OP_IMMEDIATE;
             dst_op->immediate = (int32_t)src_op->operand_value.rel_val;
@@ -213,6 +218,7 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
                 Instruction *item = &result->instructions[result->count++];
                 memset(item, 0, sizeof(*item));
 
+                item->is_valid      = true;
                 item->start_address = cur_addr;
                 item->length        = bin.length;
                 item->raw_decoded   = bin;
@@ -268,21 +274,36 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
                     }
                 }
 
-                if (item->n_operands >= 1) {
-                    if (item->operands[0].type == OP_REGISTER) {
-                        item->dest_reg = item->operands[0].reg;
-                    } else if (item->operands[0].type == OP_MEMORY) {
-                        item->is_memory_dest = true;
-                        item->mem_dest = item->operands[0].mem;
-                    }
-                }
+                bool is_single_src = (item->n_operands == 1 &&
+                                      (strcasecmp(inst.mnemonic_name, "idiv") == 0 ||
+                                       strcasecmp(inst.mnemonic_name, "div") == 0 ||
+                                       strcasecmp(inst.mnemonic_name, "imul") == 0 ||
+                                       strcasecmp(inst.mnemonic_name, "mul") == 0));
 
-                if (item->n_operands >= 2) {
-                    if (item->operands[1].type == OP_REGISTER) {
-                        item->src_reg = item->operands[1].reg;
-                    } else if (item->operands[1].type == OP_MEMORY) {
+                if (is_single_src) {
+                    if (item->operands[0].type == OP_REGISTER) {
+                        item->src_reg = item->operands[0].reg;
+                    } else if (item->operands[0].type == OP_MEMORY) {
                         item->is_memory_src = true;
-                        item->mem_src = item->operands[1].mem;
+                        item->mem_src = item->operands[0].mem;
+                    }
+                } else {
+                    if (item->n_operands >= 1) {
+                        if (item->operands[0].type == OP_REGISTER) {
+                            item->dest_reg = item->operands[0].reg;
+                        } else if (item->operands[0].type == OP_MEMORY) {
+                            item->is_memory_dest = true;
+                            item->mem_dest = item->operands[0].mem;
+                        }
+                    }
+
+                    if (item->n_operands >= 2) {
+                        if (item->operands[1].type == OP_REGISTER) {
+                            item->src_reg = item->operands[1].reg;
+                        } else if (item->operands[1].type == OP_MEMORY) {
+                            item->is_memory_src = true;
+                            item->mem_src = item->operands[1].mem;
+                        }
                     }
                 }
 
@@ -312,7 +333,8 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
         strncpy(item->cmd, "BYTE", MAX_CMD_LEN - 1);
         snprintf(item->text, sizeof(item->text), ".byte 0x%02x", code[offset]);
 
-        item->type          = NORMAL;
+        item->type          = INVALID;
+        item->is_valid      = false;
         item->condition     = COND_NONE;
         item->dest_reg      = REG_INVALID;
         item->src_reg       = REG_INVALID;
@@ -406,21 +428,45 @@ decoded_program* disasm_for_worklet2(const char *filepath) {
         dst->flow    = (uint8_t)src->type;
         dst->target  = src->has_target_address ? src->target_address : 0;
 
-        for (int op = 0; op < 2 && op < (int)src->n_operands; op++) {
-            if (src->operands[op].type == OP_REGISTER) {
-                dst->operand_kind[op] = W2_OP_REG;
-                dst->operand_reg[op]  = (uint8_t)src->operands[op].reg;
-            } else if (src->operands[op].type == OP_IMMEDIATE) {
-                dst->operand_kind[op] = W2_OP_IMM;
-                dst->operand_reg[op]  = 0xFF;
-                dst->immediate        = src->operands[op].immediate;
-            } else if (src->operands[op].type == OP_MEMORY) {
-                dst->operand_kind[op] = W2_OP_MEM;
-                dst->operand_reg[op]  = (src->operands[op].mem.base != REG_INVALID) ?
-                                         (uint8_t)src->operands[op].mem.base : 0xFF;
-            } else {
-                dst->operand_kind[op] = W2_OP_NONE;
-                dst->operand_reg[op]  = 0xFF;
+        bool is_single_src = (src->n_operands == 1 &&
+                              (strcasecmp(src->mnemonic, "idiv") == 0 ||
+                               strcasecmp(src->mnemonic, "div") == 0 ||
+                               strcasecmp(src->mnemonic, "imul") == 0 ||
+                               strcasecmp(src->mnemonic, "mul") == 0));
+
+        if (src->type == INVALID || !src->is_valid) {
+            dst->flow = 0xFF;
+        } else if (is_single_src) {
+            if (src->operands[0].type == OP_REGISTER) {
+                dst->operand_kind[0] = W2_OP_REG;
+                dst->operand_reg[0]  = (uint8_t)src->operands[0].reg;
+                dst->operand_kind[1] = W2_OP_REG;
+                dst->operand_reg[1]  = (uint8_t)src->operands[0].reg;
+            } else if (src->operands[0].type == OP_MEMORY) {
+                uint8_t base_reg = (src->operands[0].mem.base != REG_INVALID) ?
+                                         (uint8_t)src->operands[0].mem.base : 0xFF;
+                dst->operand_kind[0] = W2_OP_MEM;
+                dst->operand_reg[0]  = base_reg;
+                dst->operand_kind[1] = W2_OP_MEM;
+                dst->operand_reg[1]  = base_reg;
+            }
+        } else {
+            for (int op = 0; op < 2 && op < (int)src->n_operands; op++) {
+                if (src->operands[op].type == OP_REGISTER) {
+                    dst->operand_kind[op] = W2_OP_REG;
+                    dst->operand_reg[op]  = (uint8_t)src->operands[op].reg;
+                } else if (src->operands[op].type == OP_IMMEDIATE) {
+                    dst->operand_kind[op] = W2_OP_IMM;
+                    dst->operand_reg[op]  = 0xFF;
+                    dst->immediate        = src->operands[op].immediate;
+                } else if (src->operands[op].type == OP_MEMORY) {
+                    dst->operand_kind[op] = W2_OP_MEM;
+                    dst->operand_reg[op]  = (src->operands[op].mem.base != REG_INVALID) ?
+                                             (uint8_t)src->operands[op].mem.base : 0xFF;
+                } else {
+                    dst->operand_kind[op] = W2_OP_NONE;
+                    dst->operand_reg[op]  = 0xFF;
+                }
             }
         }
 

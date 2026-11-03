@@ -6,6 +6,7 @@
 #define OP_REG(w, role)      { .encoding_type = ENCODING_REG,        .operand_width = (w), .operand_role = (role) }
 #define OP_OPREG(w, role)    { .encoding_type = ENCODING_OPCODE_REG, .operand_width = (w), .operand_role = (role) }
 #define OP_IMM(w, role)      { .encoding_type = ENCODING_IMMEDIATE,  .operand_width = (w), .operand_role = (role) }
+#define OP_CONST(v, w, role) { .encoding_type = ENCODING_IMPLICIT,   .operand_width = (w), .operand_value = { .const_val = (v) }, .operand_role = (role) }
 #define OP_REL(w, role)      { .encoding_type = ENCODING_RELATIVE,   .operand_width = (w), .operand_role = (role) }
 #define OP_FIXED(r, w, role) { .encoding_type = ENCODING_FIXED_REG,  .operand_width = (w), .operand_value = { .reg = (r) }, .operand_role = (role) }
 
@@ -30,6 +31,10 @@ static const instruction_reference_t instruction_table[] = {
     // MOV r/m, imm (Group 11: 0xC6 /0, 0xC7 /0)
     { .opcode_bytes = {0xC6}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "MOV", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_0, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_8, OPERAND_DESTINATION), OP_IMM(WIDTH_8, OPERAND_SOURCE) } },
     { .opcode_bytes = {0xC7}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "MOV", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_0, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_DESTINATION), OP_IMM(WIDTH_32, OPERAND_SOURCE) } },
+
+    // MOV EAX, moffs32 (0xA1) & MOV moffs32, EAX (0xA3)
+    { .opcode_bytes = {0xA1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "MOV", .modrm_needed = false, .opcode_extension = OPCODE_EXTENSION_R, .operand_count = COUNT_TWO, .operands = { OP_FIXED(EAX, WIDTH_32, OPERAND_DESTINATION), OP_RM(WIDTH_32, OPERAND_SOURCE) } },
+    { .opcode_bytes = {0xA3}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "MOV", .modrm_needed = false, .opcode_extension = OPCODE_EXTENSION_R, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_DESTINATION), OP_FIXED(EAX, WIDTH_32, OPERAND_SOURCE) } },
 
     // LEA r32, m
     { .opcode_bytes = {0x8D}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "LEA", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_R, .operand_count = COUNT_TWO, .operands = { OP_REG(WIDTH_32, OPERAND_DESTINATION), OP_RM(WIDTH_32, OPERAND_SOURCE) } },
@@ -205,22 +210,25 @@ static const instruction_reference_t instruction_table[] = {
     { .opcode_bytes = {0xC2}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "RET",   .modrm_needed = false, .opcode_extension = OPCODE_EXTENSION_R, .operand_count = COUNT_ONE,  .operands = { OP_IMM(WIDTH_16, OPERAND_SOURCE) } },
     { .opcode_bytes = {0xC9}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "LEAVE", .modrm_needed = false, .opcode_extension = OPCODE_EXTENSION_R, .operand_count = COUNT_ZERO },
 
+    // INT imm8 (0xCD)
+    { .opcode_bytes = {0xCD}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "INT",   .modrm_needed = false, .opcode_extension = OPCODE_EXTENSION_R, .operand_count = COUNT_ONE,  .operands = { OP_IMM(WIDTH_8, OPERAND_SOURCE) } },
+
     // =========================================================================
     // 7. SHIFT / ROTATE: SHL, SHR, SAR
     // =========================================================================
 
     // SHL/SAL (Group 2: reg = 4)
-    { .opcode_bytes = {0xD1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SHL", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_4, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_IMM(WIDTH_8, OPERAND_SOURCE) } },
+    { .opcode_bytes = {0xD1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SHL", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_4, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_CONST(1, WIDTH_8, OPERAND_SOURCE) } },
     { .opcode_bytes = {0xD3}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SHL", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_4, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_FIXED(CL, WIDTH_8, OPERAND_SOURCE) } },
     { .opcode_bytes = {0xC1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SHL", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_4, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_IMM(WIDTH_8, OPERAND_SOURCE) } },
 
     // SHR (Group 2: reg = 5)
-    { .opcode_bytes = {0xD1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SHR", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_5, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_IMM(WIDTH_8, OPERAND_SOURCE) } },
+    { .opcode_bytes = {0xD1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SHR", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_5, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_CONST(1, WIDTH_8, OPERAND_SOURCE) } },
     { .opcode_bytes = {0xD3}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SHR", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_5, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_FIXED(CL, WIDTH_8, OPERAND_SOURCE) } },
     { .opcode_bytes = {0xC1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SHR", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_5, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_IMM(WIDTH_8, OPERAND_SOURCE) } },
 
     // SAR (Group 2: reg = 7)
-    { .opcode_bytes = {0xD1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SAR", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_7, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_IMM(WIDTH_8, OPERAND_SOURCE) } },
+    { .opcode_bytes = {0xD1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SAR", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_7, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_CONST(1, WIDTH_8, OPERAND_SOURCE) } },
     { .opcode_bytes = {0xD3}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SAR", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_7, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_FIXED(CL, WIDTH_8, OPERAND_SOURCE) } },
     { .opcode_bytes = {0xC1}, .opcode_size = ONE_B_OPCODE, .mnemonic_name = "SAR", .modrm_needed = true, .opcode_extension = OPCODE_EXTENSION_7, .operand_count = COUNT_TWO, .operands = { OP_RM(WIDTH_32, OPERAND_SRC_DEST), OP_IMM(WIDTH_8, OPERAND_SOURCE) } },
 
