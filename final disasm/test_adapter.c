@@ -127,8 +127,13 @@ int main(void) {
     // -------------------------------------------------------------
     // 7. ELF file direct disassembly API safety checks
     // -------------------------------------------------------------
+    // Worklet 3 (Frontend API)
     assert(disasm_elf_file(NULL) == NULL);
     assert(disasm_elf_file("non_existent_file_xyz.elf") == NULL);
+
+    // Worklet 2 (Execution / Debugger API)
+    assert(disasm_for_worklet2(NULL) == NULL);
+    assert(disasm_for_worklet2("non_existent_file_xyz.elf") == NULL);
 
     free_adapter_result(res);
     printf("\n[SUCCESS] All unified adapter assertions passed cleanly!\n\n");

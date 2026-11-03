@@ -196,7 +196,7 @@ typedef struct Instruction {
 } Instruction;
 
 /* ========================================================================= */
-/* 8. Disassembly Result Container                                           */
+/* 8. Disassembly Result Container (Worklet 3 / Frontend API)               */
 /* ========================================================================= */
 
 typedef struct DisasmResult {
@@ -206,17 +206,57 @@ typedef struct DisasmResult {
 } DisasmResult;
 
 /* ========================================================================= */
-/* 9. Public API Functions                                                   */
+/* 9. Worklet 2 (Execution / Debugger Engine) Structures                     */
 /* ========================================================================= */
 
-// Disassembles raw machine code into the unified Instruction format.
+// Operand kind enumeration for Worklet 2
+typedef enum Worklet2OperandKind {
+    W2_OP_NONE = 0,
+    W2_OP_REG  = 1,
+    W2_OP_IMM  = 2,
+    W2_OP_MEM  = 3
+} Worklet2OperandKind;
+
+// Individual instruction structure for Worklet 2
+typedef struct worklet2_instruction {
+    uint32_t address;            // Instruction virtual address
+    uint8_t  length;             // Byte length
+    char     mnemonic[16];       // Lowercase mnemonic, e.g. "mov", "sub"
+    uint8_t  flow;               // Control flow (0=NORMAL, 1=COND_BRANCH, 2=JUMP, 3=CALL, 4=RET)
+    uint32_t target;             // Absolute branch / jump destination address
+    uint8_t  operand_kind[2];    // Kinds for up to 2 operands (W2_OP_REG, W2_OP_IMM, W2_OP_MEM)
+    uint8_t  operand_reg[2];     // Register IDs (REG_EAX..REG_EDI) or 0xFF if none
+    int32_t  immediate;          // Immediate value if present
+} worklet2_instruction;
+
+// Decoded program container for Worklet 2
+typedef struct decoded_program {
+    uint32_t              load_base;   // Virtual base address of .text section
+    uint32_t              entry_point; // ELF execution entry point (e_entry)
+    const uint8_t        *code;        // Pointer to raw .text machine bytes
+    size_t                code_size;   // Byte length of .text section
+    worklet2_instruction *insns;       // Array of decoded instructions
+    int                   insn_count;  // Total count of decoded instructions
+} decoded_program;
+
+/* ========================================================================= */
+/* 10. Public API Functions                                                  */
+/* ========================================================================= */
+
+// [WORKLET 3 - FRONTEND] Disassembles raw machine code into the Instruction format.
 DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, unsigned int start_addr);
 
-// Disassembles the .text section of a 32-bit ELF file directly.
+// [WORKLET 3 - FRONTEND] Disassembles the .text section of a 32-bit ELF file directly.
 DisasmResult* disasm_elf_file(const char *filepath);
 
-// Frees the DisasmResult structure and all allocated instruction buffers.
+// [WORKLET 3 - FRONTEND] Frees the DisasmResult structure and instruction buffers.
 void free_adapter_result(DisasmResult *result);
+
+// [WORKLET 2 - EXECUTION ENGINE] Disassembles 32-bit ELF file directly into decoded_program.
+decoded_program* disasm_for_worklet2(const char *filepath);
+
+// [WORKLET 2 - EXECUTION ENGINE] Frees the decoded_program structure and instruction buffers.
+void free_decoded_program(decoded_program *prog);
 
 // Backward-compatibility aliases
 #define disasm_to_passed_format    disasm_to_adapter

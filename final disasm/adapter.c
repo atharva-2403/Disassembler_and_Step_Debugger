@@ -388,7 +388,7 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
 }
 
 /* ========================================================================= */
-/* ELF32 Convenience API: Disassemble Directly From File                     */
+/* [WORKLET 3 - FRONTEND] Disassemble Directly From 32-bit ELF File          */
 /* ========================================================================= */
 
 DisasmResult* disasm_elf_file(const char *filepath) {
@@ -403,7 +403,7 @@ DisasmResult* disasm_elf_file(const char *filepath) {
 }
 
 /* ========================================================================= */
-/* Cleanup API: Free Memory Resources                                        */
+/* [WORKLET 3 - FRONTEND] Free DisasmResult Resources                        */
 /* ========================================================================= */
 
 void free_adapter_result(DisasmResult *result) {
@@ -413,5 +413,102 @@ void free_adapter_result(DisasmResult *result) {
             result->instructions = NULL;
         }
         free(result);
+    }
+}
+
+/* ========================================================================= */
+/* [WORKLET 2 - EXECUTION ENGINE] Disassemble ELF into decoded_program       */
+/* ========================================================================= */
+
+decoded_program* disasm_for_worklet2(const char *filepath) {
+    if (!filepath) return NULL;
+
+    elf32_section_t sec;
+    if (elf32_load_text_section(filepath, &sec) != 0) {
+        return NULL;
+    }
+
+    DisasmResult *dis = disasm_to_adapter(sec.data, (unsigned int)sec.size, sec.vaddr);
+    if (!dis) {
+        elf32_free_section(&sec);
+        return NULL;
+    }
+
+    decoded_program *prog = malloc(sizeof(decoded_program));
+    if (!prog) {
+        free_adapter_result(dis);
+        elf32_free_section(&sec);
+        return NULL;
+    }
+
+    prog->load_base   = sec.vaddr;
+    prog->entry_point = sec.entry_point;
+    prog->code        = sec.data;        // prog takes ownership of .text bytes
+    prog->code_size   = sec.size;
+    prog->insn_count  = (int)dis->count;
+
+    prog->insns = malloc(sizeof(worklet2_instruction) * (prog->insn_count > 0 ? prog->insn_count : 1));
+    if (!prog->insns) {
+        free(prog);
+        free_adapter_result(dis);
+        elf32_free_section(&sec);
+        return NULL;
+    }
+
+    for (int i = 0; i < prog->insn_count; i++) {
+        Instruction *src = &dis->instructions[i];
+        worklet2_instruction *dst = &prog->insns[i];
+        memset(dst, 0, sizeof(*dst));
+
+        dst->address = src->start_address;
+        dst->length  = (uint8_t)src->length;
+        strncpy(dst->mnemonic, src->mnemonic, sizeof(dst->mnemonic) - 1);
+        dst->flow    = (uint8_t)src->type;
+        dst->target  = src->has_target_address ? src->target_address : 0;
+
+        // Map up to 2 operands
+        for (int op = 0; op < 2 && op < (int)src->n_operands; op++) {
+            if (src->operands[op].type == OP_REGISTER) {
+                dst->operand_kind[op] = W2_OP_REG;
+                dst->operand_reg[op]  = (uint8_t)src->operands[op].reg;
+            } else if (src->operands[op].type == OP_IMMEDIATE) {
+                dst->operand_kind[op] = W2_OP_IMM;
+                dst->operand_reg[op]  = 0xFF;
+                dst->immediate        = src->operands[op].immediate;
+            } else if (src->operands[op].type == OP_MEMORY) {
+                dst->operand_kind[op] = W2_OP_MEM;
+                dst->operand_reg[op]  = (src->operands[op].mem.base != REG_INVALID) ?
+                                         (uint8_t)src->operands[op].mem.base : 0xFF;
+            } else {
+                dst->operand_kind[op] = W2_OP_NONE;
+                dst->operand_reg[op]  = 0xFF;
+            }
+        }
+
+        if (src->has_immediate && dst->immediate == 0) {
+            dst->immediate = src->immediate_val;
+        }
+    }
+
+    free_adapter_result(dis);
+    // Note: Do not call elf32_free_section(&sec) because sec.data ownership moved to prog->code
+    return prog;
+}
+
+/* ========================================================================= */
+/* [WORKLET 2 - EXECUTION ENGINE] Free decoded_program Resources             */
+/* ========================================================================= */
+
+void free_decoded_program(decoded_program *prog) {
+    if (prog) {
+        if (prog->insns) {
+            free(prog->insns);
+            prog->insns = NULL;
+        }
+        if (prog->code) {
+            free((void *)prog->code);
+            prog->code = NULL;
+        }
+        free(prog);
     }
 }
