@@ -13,55 +13,43 @@
 #define MAX_TEXT_LEN     64
 #define MAX_HEX_LEN      32
 
-/* ========================================================================= */
-/* 1. Control Flow & Instruction Classification                             */
-/* ========================================================================= */
-
-// How the instruction changes EIP (matches instruction.h.txt exactly)
+/* Instruction flow / branch category */
 typedef enum InstructionType {
-    NORMAL = 0,              // Sequential execution: EIP += length
-    CONDITIONAL_BRANCH,      // Conditional jump (e.g. JE, JNE, JG, JL)
-    JUMP,                    // Unconditional jump (e.g. JMP)
-    CALL,                    // Function call (pushes return address, jumps)
-    RET                      // Function return (pops EIP from stack)
+    NORMAL = 0,
+    CONDITIONAL_BRANCH,
+    JUMP,
+    CALL,
+    RET
 } InstructionType;
 
-// Aliases for clear namespacing
 #define INST_NORMAL          NORMAL
 #define INST_COND_BRANCH     CONDITIONAL_BRANCH
 #define INST_JUMP            JUMP
 #define INST_CALL            CALL
 #define INST_RET             RET
 
-/* ========================================================================= */
-/* 2. Condition Codes (for Jcc & SETcc Evaluation by Debugger)              */
-/* ========================================================================= */
-
+/* Condition codes for Jcc and SETcc instructions */
 typedef enum ConditionCode {
-    COND_NONE = 0,           // Non-conditional instruction
-    COND_E,                  // Equal / Zero: ZF == 1
-    COND_NE,                 // Not Equal / Not Zero: ZF == 0
-    COND_L,                  // Less: SF != OF
-    COND_LE,                 // Less or Equal: ZF == 1 || SF != OF
-    COND_G,                  // Greater: ZF == 0 && SF == OF
-    COND_GE,                 // Greater or Equal: SF == OF
-    COND_B,                  // Below / Carry: CF == 1
-    COND_BE,                 // Below or Equal: CF == 1 || ZF == 1
-    COND_A,                  // Above: CF == 0 && ZF == 0
-    COND_AE,                 // Above or Equal: CF == 0
-    COND_S,                  // Sign: SF == 1
-    COND_NS,                 // No Sign: SF == 0
-    COND_O,                  // Overflow: OF == 1
-    COND_NO,                 // No Overflow: OF == 0
-    COND_P,                  // Parity: PF == 1
-    COND_NP                  // No Parity: PF == 0
+    COND_NONE = 0,
+    COND_E,
+    COND_NE,
+    COND_L,
+    COND_LE,
+    COND_G,
+    COND_GE,
+    COND_B,
+    COND_BE,
+    COND_A,
+    COND_AE,
+    COND_S,
+    COND_NS,
+    COND_O,
+    COND_NO,
+    COND_P,
+    COND_NP
 } ConditionCode;
 
-/* ========================================================================= */
-/* 3. Register Enums (x86 Hardware Encoding Order & Sub-Registers)           */
-/* ========================================================================= */
-
-// Registers in x86 encoding order, same numbers as the ModR/M fields
+/* x86 32-bit architectural registers */
 typedef enum RegName {
     REG_EAX = 0,
     REG_ECX = 1,
@@ -71,16 +59,14 @@ typedef enum RegName {
     REG_EBP = 5,
     REG_ESI = 6,
     REG_EDI = 7,
-    REG_INVALID = 255        // No register
+    REG_INVALID = 255
 } RegName;
 
 #define REG_COUNT 8
 #define REG_NONE  REG_INVALID
 
-// Backward compatibility alias for Register type
 typedef RegName Register;
 
-// Backward compatibility constants when reference framework is not included
 #ifndef REFERENCE_INSTRUCTION_FRAMEWORK_H
 #define EAX REG_EAX
 #define ECX REG_ECX
@@ -92,124 +78,96 @@ typedef RegName Register;
 #define EDI REG_EDI
 #endif
 
-/* ========================================================================= */
-/* 4. Operand Width / Data Access Size                                       */
-/* ========================================================================= */
-
 typedef enum OperandWidth {
     WIDTH_UNKNOWN = 0,
-    WIDTH_8_BIT   = 1,       // Byte (1 byte, e.g. %al, byte ptr)
-    WIDTH_16_BIT  = 2,       // Word (2 bytes, e.g. %ax, word ptr)
-    WIDTH_32_BIT  = 4        // Dword (4 bytes, e.g. %eax, dword ptr)
+    WIDTH_8_BIT   = 1,
+    WIDTH_16_BIT  = 2,
+    WIDTH_32_BIT  = 4
 } OperandWidth;
 
-/* ========================================================================= */
-/* 5. Memory Operand: address = base + index*scale + disp                    */
-/* ========================================================================= */
-
+/* Memory address computation: [base + index*scale + disp] */
 typedef struct MemOperand {
-    RegName base;            // REG_INVALID if none
-    RegName index;           // REG_INVALID if none
-    uint8_t scale;           // 1, 2, 4 or 8 (0 if no index)
+    RegName base;
+    RegName index;
+    uint8_t scale;
     union {
-        int32_t disp;        // Displacement offset
-        int32_t offset;      // Backward compatibility alias
+        int32_t disp;
+        int32_t offset;
     };
 } MemOperand;
 
-/* ========================================================================= */
-/* 6. Unified Operand Representation                                         */
-/* ========================================================================= */
-
 typedef enum OperandType {
     OP_NONE = 0,
-    OP_REGISTER,             // CPU Register operand
-    OP_IMMEDIATE,            // Constant / Literal immediate operand
-    OP_MEMORY                // Memory address [base + index*scale + disp]
+    OP_REGISTER,
+    OP_IMMEDIATE,
+    OP_MEMORY
 } OperandType;
 
 typedef enum OperandRole {
     ROLE_NONE = 0,
-    ROLE_SRC,                // Read-only source operand
-    ROLE_DST,                // Write-only destination operand
-    ROLE_SRC_DST             // Read-write operand (e.g. destination in ADD/SUB)
+    ROLE_SRC,
+    ROLE_DST,
+    ROLE_SRC_DST
 } OperandRole;
 
 typedef struct Operand {
-    OperandType  type;       // OP_REGISTER, OP_IMMEDIATE, OP_MEMORY
-    OperandWidth width;      // 1, 2, or 4 bytes
-    OperandRole  role;       // Read / Write role
-
+    OperandType  type;
+    OperandWidth width;
+    OperandRole  role;
     union {
-        RegName    reg;      // Valid when type == OP_REGISTER
-        int32_t    immediate;// Valid when type == OP_IMMEDIATE
-        MemOperand mem;      // Valid when type == OP_MEMORY
+        RegName    reg;
+        int32_t    immediate;
+        MemOperand mem;
     };
 } Operand;
 
-/* ========================================================================= */
-/* 7. Unified Instruction Structure                                          */
-/* ========================================================================= */
-
+/* Main instruction structure for Frontend (Worklet 3) */
 typedef struct Instruction {
-    // 7a. Addresses and Length (instruction.h.txt + compatibility)
     union {
-        uint32_t start_address;  // Virtual address of the instruction
-        uint32_t addr;           // Backward compatibility alias
+        uint32_t start_address;
+        uint32_t addr;
     };
     union {
-        size_t length;           // Size in bytes
-        int    len;              // Backward compatibility alias
+        size_t length;
+        int    len;
     };
 
-    // 7b. Raw Decoded Information (instruction.h.txt + flat byte buffer)
-    decoded_binary raw_decoded;  // Raw bytes & physical slices for listing
-    uint8_t raw_bytes[MAX_RAW_BYTES]; // Direct flat byte array
+    decoded_binary raw_decoded;
+    uint8_t raw_bytes[MAX_RAW_BYTES];
 
-    // 7c. Text & Mnemonic Representation
-    char mnemonic[MAX_MNEMONIC_LEN]; // Lowercase name, e.g. "mov"
-    char cmd[MAX_CMD_LEN];           // Uppercase name, e.g. "MOV" for backward compatibility
-    char text[MAX_TEXT_LEN];         // Pre-formatted assembly: "mov    %esp,%ebp"
-    char hex_str[MAX_HEX_LEN];       // Pre-formatted hex bytes: "89 e5"
+    char mnemonic[MAX_MNEMONIC_LEN];
+    char cmd[MAX_CMD_LEN];
+    char text[MAX_TEXT_LEN];
+    char hex_str[MAX_HEX_LEN];
 
-    // 7d. Execution & Control Flow
-    InstructionType type;        // NORMAL, CONDITIONAL_BRANCH, JUMP, CALL, RET
-    ConditionCode   condition;   // Branch / SETcc condition code for EFLAGS
-    uint32_t target_address;     // Absolute jump/call target
-    bool     has_target_address; // True if target address is static & resolved
-    bool     is_indirect;        // True if branch target is in register/memory (e.g. jmp *%eax)
+    InstructionType type;
+    ConditionCode   condition;
+    uint32_t target_address;
+    bool     has_target_address;
+    bool     is_indirect;
 
-    // 7e. Direct Convenience Fields (instruction.h.txt)
-    RegName dest_reg;            // First operand register, REG_INVALID if none
-    RegName src_reg;             // Second operand register, REG_INVALID if none
-    int32_t immediate_val;       // Immediate value if present
-    bool    has_immediate;       // True if instruction has immediate operand
+    RegName dest_reg;
+    RegName src_reg;
+    int32_t immediate_val;
+    bool    has_immediate;
 
-    bool       is_memory_dest;   // First operand is memory
+    bool       is_memory_dest;
     MemOperand mem_dest;
-    bool       is_memory_src;    // Second operand is memory
+    bool       is_memory_src;
     MemOperand mem_src;
 
-    // 7f. Array of Operands (for Debugger / Execution Engine)
     Operand      operands[MAX_OPERANDS];
     unsigned int n_operands;
 } Instruction;
 
-/* ========================================================================= */
-/* 8. Disassembly Result Container (Worklet 3 / Frontend API)               */
-/* ========================================================================= */
-
+/* Frontend disassembler result container */
 typedef struct DisasmResult {
-    Instruction *instructions;   // Dynamically allocated array of instructions
-    unsigned int count;          // Total number of instructions decoded
-    size_t       capacity;       // Internal buffer capacity
+    Instruction *instructions;
+    unsigned int count;
+    size_t       capacity;
 } DisasmResult;
 
-/* ========================================================================= */
-/* 9. Worklet 2 (Execution / Debugger Engine) Structures                     */
-/* ========================================================================= */
-
-// Operand kind enumeration for Worklet 2
+/* Worklet 2 (Execution / Debugger Engine) types */
 typedef enum Worklet2OperandKind {
     W2_OP_NONE = 0,
     W2_OP_REG  = 1,
@@ -217,49 +175,37 @@ typedef enum Worklet2OperandKind {
     W2_OP_MEM  = 3
 } Worklet2OperandKind;
 
-// Individual instruction structure for Worklet 2
 typedef struct worklet2_instruction {
-    uint32_t address;            // Instruction virtual address
-    uint8_t  length;             // Byte length
-    char     mnemonic[16];       // Lowercase mnemonic, e.g. "mov", "sub"
-    uint8_t  flow;               // Control flow (0=NORMAL, 1=COND_BRANCH, 2=JUMP, 3=CALL, 4=RET)
-    uint32_t target;             // Absolute branch / jump destination address
-    uint8_t  operand_kind[2];    // Kinds for up to 2 operands (W2_OP_REG, W2_OP_IMM, W2_OP_MEM)
-    uint8_t  operand_reg[2];     // Register IDs (REG_EAX..REG_EDI) or 0xFF if none
-    int32_t  immediate;          // Immediate value if present
+    uint32_t address;
+    uint8_t  length;
+    char     mnemonic[16];
+    uint8_t  flow;
+    uint32_t target;
+    uint8_t  operand_kind[2];
+    uint8_t  operand_reg[2];
+    int32_t  immediate;
 } worklet2_instruction;
 
-// Decoded program container for Worklet 2
 typedef struct decoded_program {
-    uint32_t              load_base;   // Virtual base address of .text section
-    uint32_t              entry_point; // ELF execution entry point (e_entry)
-    const uint8_t        *code;        // Pointer to raw .text machine bytes
-    size_t                code_size;   // Byte length of .text section
-    worklet2_instruction *insns;       // Array of decoded instructions
-    int                   insn_count;  // Total count of decoded instructions
+    uint32_t              load_base;
+    uint32_t              entry_point;
+    const uint8_t        *code;
+    size_t                code_size;
+    worklet2_instruction *insns;
+    int                   insn_count;
 } decoded_program;
 
-/* ========================================================================= */
-/* 10. Public API Functions                                                  */
-/* ========================================================================= */
-
-// [WORKLET 3 - FRONTEND] Disassembles raw machine code into the Instruction format.
+/* --- Worklet 3 (Frontend API) --- */
 DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, unsigned int start_addr);
-
-// [WORKLET 3 - FRONTEND] Disassembles the .text section of a 32-bit ELF file directly.
 DisasmResult* disasm_elf_file(const char *filepath);
+void          free_adapter_result(DisasmResult *result);
 
-// [WORKLET 3 - FRONTEND] Frees the DisasmResult structure and instruction buffers.
-void free_adapter_result(DisasmResult *result);
-
-// [WORKLET 2 - EXECUTION ENGINE] Disassembles 32-bit ELF file directly into decoded_program.
+/* --- Worklet 2 (Execution Engine API) --- */
 decoded_program* disasm_for_worklet2(const char *filepath);
+void             free_decoded_program(decoded_program *prog);
 
-// [WORKLET 2 - EXECUTION ENGINE] Frees the decoded_program structure and instruction buffers.
-void free_decoded_program(decoded_program *prog);
-
-// Backward-compatibility aliases
+/* Aliases for older test scripts */
 #define disasm_to_passed_format    disasm_to_adapter
 #define free_passed_format_result  free_adapter_result
 
-#endif // ADAPTER_H
+#endif /* ADAPTER_H */

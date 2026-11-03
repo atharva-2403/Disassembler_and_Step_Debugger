@@ -12,13 +12,8 @@
 #include <ctype.h>
 #include <stdio.h>
 
-/* ========================================================================= */
-/* Helper: Map Internal Decoder Register Enum to Hardware-Aligned RegName   */
-/* ========================================================================= */
-
 static RegName map_register(register_t reg) {
     switch (reg) {
-        // 8-bit, 16-bit, and 32-bit registers mapped to their base architectural register ID
         case AL: case AH: case AX: case EAX: return REG_EAX;
         case CL: case CH: case CX: case ECX: return REG_ECX;
         case DL: case DH: case DX: case EDX: return REG_EDX;
@@ -31,10 +26,6 @@ static RegName map_register(register_t reg) {
     }
 }
 
-/* ========================================================================= */
-/* Helper: Map Operand Width to Standard Byte Size                           */
-/* ========================================================================= */
-
 static OperandWidth map_width(operand_width_t width) {
     switch (width) {
         case WIDTH_8:  return WIDTH_8_BIT;
@@ -43,10 +34,6 @@ static OperandWidth map_width(operand_width_t width) {
         default:       return WIDTH_UNKNOWN;
     }
 }
-
-/* ========================================================================= */
-/* Helper: Map Operand Role (Read / Write Semantics)                         */
-/* ========================================================================= */
 
 static OperandRole map_role(operand_role_t role) {
     switch (role) {
@@ -57,10 +44,6 @@ static OperandRole map_role(operand_role_t role) {
     }
 }
 
-/* ========================================================================= */
-/* Helper: Classify Instruction Flow, Conditions, and Branch Types          */
-/* ========================================================================= */
-
 static void classify_instruction(const char *mnemonic,
                                  const operand_reference_t *op0,
                                  InstructionType *out_type,
@@ -70,17 +53,13 @@ static void classify_instruction(const char *mnemonic,
     *out_cond = COND_NONE;
     *out_is_indirect = false;
 
-    if (!mnemonic) {
-        return;
-    }
+    if (!mnemonic) return;
 
-    // Return instruction
     if (strcasecmp(mnemonic, "ret") == 0) {
         *out_type = RET;
         return;
     }
 
-    // Call instruction
     if (strcasecmp(mnemonic, "call") == 0) {
         *out_type = CALL;
         if (op0 && (op0->encoding_type == ENCODING_REG || op0->encoding_type == ENCODING_RM)) {
@@ -89,7 +68,6 @@ static void classify_instruction(const char *mnemonic,
         return;
     }
 
-    // Unconditional Jump
     if (strcasecmp(mnemonic, "jmp") == 0) {
         *out_type = JUMP;
         if (op0 && (op0->encoding_type == ENCODING_REG || op0->encoding_type == ENCODING_RM)) {
@@ -98,7 +76,7 @@ static void classify_instruction(const char *mnemonic,
         return;
     }
 
-    // Conditional Branches (Jcc)
+    /* Conditional jumps (Jcc) */
     if ((mnemonic[0] == 'j' || mnemonic[0] == 'J') && strlen(mnemonic) >= 2) {
         *out_type = CONDITIONAL_BRANCH;
         const char *cc = mnemonic + 1;
@@ -139,7 +117,7 @@ static void classify_instruction(const char *mnemonic,
         return;
     }
 
-    // Conditional Set (SETcc)
+    /* Byte set on condition (SETcc) */
     if (strncasecmp(mnemonic, "set", 3) == 0 && strlen(mnemonic) >= 4) {
         const char *cc = mnemonic + 3;
         if (strcasecmp(cc, "e") == 0 || strcasecmp(cc, "z") == 0)        *out_cond = COND_E;
@@ -154,10 +132,6 @@ static void classify_instruction(const char *mnemonic,
         else if (strcasecmp(cc, "ae") == 0)                              *out_cond = COND_AE;
     }
 }
-
-/* ========================================================================= */
-/* Helper: Translate Internal Operands to Unified Format                    */
-/* ========================================================================= */
 
 static void map_operand(const decoded_binary *bin,
                         const operand_reference_t *src_op,
@@ -177,11 +151,9 @@ static void map_operand(const decoded_binary *bin,
 
         case ENCODING_RM:
             if (bin->modrm.mod == 3) {
-                // Register operand encoded in ModR/M r/m field
                 dst_op->type = OP_REGISTER;
                 dst_op->reg  = map_register(src_op->operand_value.reg);
             } else {
-                // Full effective memory address: base + index * scale + disp
                 dst_op->type = OP_MEMORY;
                 dst_op->mem.base  = map_register(src_op->operand_value.mem_val.base);
                 dst_op->mem.index = map_register(src_op->operand_value.mem_val.index);
@@ -196,7 +168,6 @@ static void map_operand(const decoded_binary *bin,
             break;
 
         case ENCODING_RELATIVE:
-            // Relative branch/call target resolved into an absolute memory address
             dst_op->type = OP_IMMEDIATE;
             dst_op->immediate = (int32_t)src_op->operand_value.rel_val;
             break;
@@ -207,19 +178,11 @@ static void map_operand(const decoded_binary *bin,
     }
 }
 
-/* ========================================================================= */
-/* Main API: Disassemble Byte Stream into Unified Adapter Format            */
-/* ========================================================================= */
-
 DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, unsigned int start_addr) {
-    if (!code || size == 0) {
-        return NULL;
-    }
+    if (!code || size == 0) return NULL;
 
     DisasmResult *result = malloc(sizeof(DisasmResult));
-    if (!result) {
-        return NULL;
-    }
+    if (!result) return NULL;
 
     result->capacity = 64;
     result->count = 0;
@@ -232,14 +195,10 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
     unsigned int offset = 0;
 
     while (offset < size) {
-        // Expand storage buffer dynamically if needed
         if (result->count >= result->capacity) {
             size_t new_cap = result->capacity * 2;
             Instruction *new_insts = realloc(result->instructions, sizeof(Instruction) * new_cap);
-            if (!new_insts) {
-                // Out of memory: preserve whatever was successfully disassembled so far
-                break;
-            }
+            if (!new_insts) break;
             result->instructions = new_insts;
             result->capacity = new_cap;
         }
@@ -254,26 +213,23 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
                 Instruction *item = &result->instructions[result->count++];
                 memset(item, 0, sizeof(*item));
 
-                // 1. Basic Metadata (instruction.h.txt + compatibility)
                 item->start_address = cur_addr;
                 item->length        = bin.length;
+                item->raw_decoded   = bin;
 
-                // 2. Raw Decoded Information & Hex String
-                item->raw_decoded = bin; // Full physical slicer struct for listing
                 size_t hex_pos = 0;
                 for (int i = 0; i < bin.length && i < MAX_RAW_BYTES; i++) {
                     item->raw_bytes[i] = bin.raw_bytes[i];
                     if (hex_pos < sizeof(item->hex_str) - 4) {
                         hex_pos += (size_t)snprintf(item->hex_str + hex_pos,
-                                                   sizeof(item->hex_str) - hex_pos,
-                                                   "%02x ", bin.raw_bytes[i]);
+                                                    sizeof(item->hex_str) - hex_pos,
+                                                    "%02x ", bin.raw_bytes[i]);
                     }
                 }
                 if (hex_pos > 0 && item->hex_str[hex_pos - 1] == ' ') {
                     item->hex_str[hex_pos - 1] = '\0';
                 }
 
-                // 3. Mnemonics (lowercase for frontend, uppercase for cmd compatibility)
                 if (inst.mnemonic_name) {
                     size_t mlen = strlen(inst.mnemonic_name);
                     for (size_t i = 0; i < mlen && i < MAX_MNEMONIC_LEN - 1; i++) {
@@ -287,10 +243,8 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
                     item->cmd[mlen < MAX_CMD_LEN ? mlen : MAX_CMD_LEN - 1] = '\0';
                 }
 
-                // 4. Pre-formatted Assembly String for Frontend
                 format_assembly_only(&bin, &inst, item->text, sizeof(item->text));
 
-                // 5. Initialize Convenience Fields (instruction.h.txt)
                 item->dest_reg        = REG_INVALID;
                 item->src_reg         = REG_INVALID;
                 item->mem_dest.base   = REG_INVALID;
@@ -298,26 +252,22 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
                 item->mem_src.base    = REG_INVALID;
                 item->mem_src.index   = REG_INVALID;
 
-                // 6. Map Operands Array & Populate Convenience Fields
                 item->n_operands = (unsigned int)inst.operand_count;
 
                 for (unsigned int i = 0; i < item->n_operands && i < MAX_OPERANDS; i++) {
                     map_operand(&bin, &inst.operands[i], &item->operands[i]);
 
-                    // Check for relative branch target address
                     if (inst.operands[i].encoding_type == ENCODING_RELATIVE) {
                         item->target_address = (uint32_t)inst.operands[i].operand_value.rel_val;
                         item->has_target_address = true;
                     }
 
-                    // Check for immediate operand
                     if (item->operands[i].type == OP_IMMEDIATE) {
                         item->immediate_val = item->operands[i].immediate;
                         item->has_immediate = true;
                     }
                 }
 
-                // Populate operand 0 fields (dest_reg / mem_dest)
                 if (item->n_operands >= 1) {
                     if (item->operands[0].type == OP_REGISTER) {
                         item->dest_reg = item->operands[0].reg;
@@ -327,7 +277,6 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
                     }
                 }
 
-                // Populate operand 1 fields (src_reg / mem_src)
                 if (item->n_operands >= 2) {
                     if (item->operands[1].type == OP_REGISTER) {
                         item->src_reg = item->operands[1].reg;
@@ -337,7 +286,6 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
                     }
                 }
 
-                // 7. Control Flow & Condition Evaluation
                 classify_instruction(inst.mnemonic_name,
                                      item->n_operands > 0 ? &inst.operands[0] : NULL,
                                      &item->type,
@@ -349,7 +297,7 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
             }
         }
 
-        // Fallback for undecodable machine bytes
+        /* Fallback for invalid or undecodable byte */
         Instruction *item = &result->instructions[result->count++];
         memset(item, 0, sizeof(*item));
 
@@ -387,9 +335,7 @@ DisasmResult* disasm_to_adapter(const unsigned char *code, unsigned int size, un
     return result;
 }
 
-/* ========================================================================= */
-/* [WORKLET 3 - FRONTEND] Disassemble Directly From 32-bit ELF File          */
-/* ========================================================================= */
+/* --- Worklet 3 (Frontend API) --- */
 
 DisasmResult* disasm_elf_file(const char *filepath) {
     if (!filepath) return NULL;
@@ -402,10 +348,6 @@ DisasmResult* disasm_elf_file(const char *filepath) {
     return result;
 }
 
-/* ========================================================================= */
-/* [WORKLET 3 - FRONTEND] Free DisasmResult Resources                        */
-/* ========================================================================= */
-
 void free_adapter_result(DisasmResult *result) {
     if (result) {
         if (result->instructions) {
@@ -416,9 +358,7 @@ void free_adapter_result(DisasmResult *result) {
     }
 }
 
-/* ========================================================================= */
-/* [WORKLET 2 - EXECUTION ENGINE] Disassemble ELF into decoded_program       */
-/* ========================================================================= */
+/* --- Worklet 2 (Execution Engine API) --- */
 
 decoded_program* disasm_for_worklet2(const char *filepath) {
     if (!filepath) return NULL;
@@ -443,7 +383,7 @@ decoded_program* disasm_for_worklet2(const char *filepath) {
 
     prog->load_base   = sec.vaddr;
     prog->entry_point = sec.entry_point;
-    prog->code        = sec.data;        // prog takes ownership of .text bytes
+    prog->code        = sec.data;
     prog->code_size   = sec.size;
     prog->insn_count  = (int)dis->count;
 
@@ -466,7 +406,6 @@ decoded_program* disasm_for_worklet2(const char *filepath) {
         dst->flow    = (uint8_t)src->type;
         dst->target  = src->has_target_address ? src->target_address : 0;
 
-        // Map up to 2 operands
         for (int op = 0; op < 2 && op < (int)src->n_operands; op++) {
             if (src->operands[op].type == OP_REGISTER) {
                 dst->operand_kind[op] = W2_OP_REG;
@@ -491,13 +430,8 @@ decoded_program* disasm_for_worklet2(const char *filepath) {
     }
 
     free_adapter_result(dis);
-    // Note: Do not call elf32_free_section(&sec) because sec.data ownership moved to prog->code
     return prog;
 }
-
-/* ========================================================================= */
-/* [WORKLET 2 - EXECUTION ENGINE] Free decoded_program Resources             */
-/* ========================================================================= */
 
 void free_decoded_program(decoded_program *prog) {
     if (prog) {
