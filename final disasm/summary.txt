@@ -1,3 +1,7 @@
+================================================================================
+NOTE: DO NOT REFER TO THIS (OUTDATED REFERENCE)
+================================================================================
+
 Project Summary: x86-32 ELF Disassembler & Step Debugger
 
 1. What this Project is:
