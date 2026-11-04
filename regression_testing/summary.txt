@@ -1,0 +1,138 @@
+Project Summary: x86-32 ELF Disassembler & Step Debugger
+
+1. What this Project is:
+A lightweight x86-32 (IA-32) disassembler written in C that parses 32-bit ELF
+executables and prints machine code in GNU objdump-style AT&T syntax. The
+longer-term goal outlined in the study plan is to build a full interactive
+ptrace-based debugger on top of this disassembly engine.
+
+The disassembler follows a clean two-stage decoding pipeline:
+  (Raw Bytes) 
+      -> Stage 1 (Physical Slicer): splits prefixes, opcode, ModR/M, SIB, disp, imm
+      -> Stage 2 (Semantic Decoder): resolves operands, registers, effective memory
+
+
+2. What is implemented:
+a. Stage 1: Physical Slicing & Prefix Decoding (prefix.c, decoder.c)
+    - Instruction prefix detection (0x66 operand size override, 0x67 address size,
+      0xF0 lock, 0xF2/0xF3 repeat, and segment overrides).
+    - Table-driven 1-byte and 2-byte (0x0F) opcode length parsing.
+    - ModR/M byte unpacking (mod, reg, rm fields).
+    - SIB byte unpacking (scale, index, base fields).
+    - Displacement extraction (disp8, disp32, with [disp32] and [index*scale+disp32]
+      special cases).
+    - Immediate value extraction (imm8, imm16, imm32, with 0x66 prefix truncation
+      and group 3 F6/F7 immediate edge-case handling).
+    - Raw byte and instruction length tracking (up to 15 bytes max per x86 spec).
+
+b. Stage 2: Instruction Metadata & Semantic Decoding (instruction_table.c, semantic_decoder.c)
+    - Opcode lookup table supporting standard IA-32 arithmetic, logic, stack,
+      control transfer, and data movement instructions.
+    - Embedded opcode register handling (e.g., 0x50+rd push/pop).
+    - ModR/M reg field extension opcodes (group 1-5 instructions like add, sub, cmp, idiv).
+    - Register resolution across 8-bit, 16-bit, and 32-bit registers (AL-EDI).
+    - Effective memory address calculation: disp(%base, %index, scale), including
+      special cases (e.g. no base when mod=0 and rm/base=5; esp cannot be index).
+    - Immediate sign-extension (e.g. 8-bit immediate sign-extended for 32-bit ops).
+    - Relative branch target address calculation for JMP, Jcc, and CALL (addr + len + offset).
+
+c. ELF Loading & Execution (decoder.c, main.c)
+    - 32-bit ELF header validation (magic bytes, ELFCLASS32 check).
+    - Section header parsing to locate and load the .text section.
+
+
+d. Verification & Tests (Makefile, test_state.c{test name may vary on the basisi of the name of the file.})
+    - Automated test runner verifying slicing and semantic decoding across core patterns.
+    - Disassembles real compiled 32-bit binaries (tested against recursive
+      Fibonacci and Quicksort).
+
+
+3. Implemented Instructions in Table (instruction_table.c):
+a. Data Movement:
+    - MOV     : r/m, reg | reg, r/m | reg, imm | r/m, imm (8-bit and 32-bit forms)
+    - MOVZX   : r32, r/m8 | r32, r/m16 (zero-extension)
+    - LEA     : r32, m (load effective address)
+    - PUSH    : r32 | imm8 | imm32 | r/m32
+    - POP     : r32 | r/m32
+
+b. Arithmetic:
+    - ADD     : r/m, reg | reg, r/m | AL/EAX, imm | r/m, imm (8-bit and 32-bit forms)
+    - SUB     : r/m, reg | reg, r/m | AL/EAX, imm | r/m, imm (8-bit and 32-bit forms)
+    - INC     : r32 | r/m8 | r/m32
+    - DEC     : r32 | r/m8 | r/m32
+    - IMUL    : r/m32 (1-op) | r32, r/m32 (2-op) | r32, r/m32, imm8/imm32 (3-op)
+    - NEG     : r/m8 | r/m32 (two's complement negation)
+
+c. Division & Sign-Extension:
+    - IDIV    : r/m8 | r/m32 (signed division)
+    - DIV     : r/m8 | r/m32 (unsigned division)
+    - CDQ     : convert doubleword to quadword (sign-extends EAX into EDX:EAX)
+
+d. Logic & Bitwise:
+    - AND     : r/m, reg | reg, r/m | AL/EAX, imm | r/m, imm (8-bit and 32-bit forms)
+    - OR      : r/m, reg | reg, r/m | AL/EAX, imm | r/m, imm (8-bit and 32-bit forms)
+    - XOR     : r/m, reg | reg, r/m | AL/EAX, imm | r/m, imm (8-bit and 32-bit forms)
+    - NOT     : r/m8 | r/m32 (one's complement bitwise inversion)
+    - TEST    : r/m, reg | AL/EAX, imm | r/m, imm (non-destructive AND)
+
+e. Comparison:
+    - CMP     : r/m, reg | reg, r/m | AL/EAX, imm | r/m, imm (non-destructive subtract)
+
+f. Shifts & Rotates:
+    - SHL/SAL : r/m32 by 1, CL, or imm8 (shift logical/arithmetic left)
+    - SHR     : r/m32 by 1, CL, or imm8 (shift logical right)
+    - SAR     : r/m32 by 1, CL, or imm8 (shift arithmetic right)
+
+g. Control Flow:
+    - JMP     : rel8 (short) | rel32 (near) | r/m32 (indirect)
+    - Jcc     : short (rel8) & near (rel32) conditional branches:
+                JE/JZ, JNE/JNZ, JG/JNLE, JL/JNGE, JGE/JNL, JLE/JNG, JA/JNBE, JB/JNAE
+    - CALL    : rel32 (direct near call) | r/m32 (indirect near call)
+    - RET     : near return (no operands) | near return with imm16 stack pop
+    - LEAVE   : high-level procedure exit (restores EBP, ESP)
+
+h. Conditional Byte Set (SETcc):
+    - SETcc   : r/m8 based on condition flags:
+                SETE, SETNE, SETG, SETL, SETGE, SETLE, SETA, SETB
+
+i. No-op & Padding:
+    - NOP     : 1-byte standard NOP (0x90) | multi-byte NOP (0x0F 0x1F /0)
+
+
+4. What is NOT Implemented (Pending work):
+a. ELF Symbol Table Parsing:
+    - Symbol tables (.symtab / .strtab) are not parsed yet.
+    - Function names and labels (e.g., <fibonacci>, <quicksort>) are not resolved;
+      calls and jumps currently show target addresses rather than symbol labels.
+
+b. Comprehensive x86 Instruction Coverage:
+    - Floating point (x87 FPU opcodes 0xD8-0xDF) are unsupported.
+    - SIMD / vector extensions (MMX, SSE, AVX) are unsupported.
+    - String instructions with implicit operands (MOVS, STOS, LODS, CMPS).
+    - Far calls and far jumps (ENCODING_FAR_POINTER).
+    - Full two-byte (0x0F) opcode matrix: only the common instructions (Jcc near,
+      SETcc, CMOVcc, MOVZX, MOVSX, IMUL) are mapped.
+
+c. Prefix Rendering in Formatter:
+    - String repeat prefixes (REP / REPE / REPNE) and LOCK prefixes are detected
+      in slicing, but formatter does not yet print them as instruction prefixes.
+    - Segment override prefixes (%fs:, %gs:) are detected but not rendered in front
+      of memory operands.
+
+d. Interactive Step Debugger (Phase 4 of Study Plan):
+    - Completely untouched so far.
+    - No process attachment or launch using ptrace (PTRACE_TRACEME / PTRACE_ATTACH).
+    - No software breakpoint injection (overwriting byte with 0xCC / INT 3).
+    - No register inspection/modification (PTRACE_GETREGS / PTRACE_SETREGS).
+    - No single-stepping (PTRACE_SINGLESTEP).
+    - No interactive command loop (break, run, continue, step, info registers).
+
+e. Automated Diff Test Harness (Phase 5 of Study Plan):
+    - No automated shell script diffing `./disasm` output against GNU `objdump -d`
+      line-by-line across a test corpus.
+
+
+5. How to build & run :
+  make state         - Compiles current decoder modules cleanly
+  make test_state    - Runs the decoder verification test suite   //name of the test case c file may vary depending on the one in the repository
+  make clean         - Cleans all compiled binaries and object files
